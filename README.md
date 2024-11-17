@@ -58,14 +58,22 @@ public:
 };
 }
 ```
-build library sample.so
+build library sample.so (linux)
 ```bash
 clang -c -o sample.o sample.cpp
 clang -shared sample.o -o sample.so
 ```
-
-run test with source code (cpp or h) with library
+or build library sample.dll for windows.
 ```bash
-python3 -m cdoctest  -cdtt=sample.h -cdtl=sample.so -cdtcip=/usr/lib/llvm-18/lib/clang/18/include/
+clang-cl -c -o sample.o sample.cpp
+clang -shared sample.o -o sample.dll
 ```
 
+run test with source code (cpp or h) with shared library (linux)
+```bash
+python3 -m cdoctest  -cdtt=sample.h -cdtl=sample.so -cdtcip=.
+```
+or run test with source code (cpp or h) with dll library with windows.
+```bash
+python3 -m cdoctest  -cdtt=sample.h -cdtl=sample.dll -cdtcip=.
+```

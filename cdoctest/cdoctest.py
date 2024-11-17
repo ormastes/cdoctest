@@ -421,7 +421,10 @@ class CDocTest:
 
         for node in merged_node:
             self.run()
-            self.load(target_lib)
+            # target_lib can separate by ';'
+            target_libs = target_lib.split(';')
+            for target_lib in target_libs:
+                self.load(target_lib)
             self.include('cstdio', True)
             if name is not None:
                 self.include(name + '.' + header_extension)

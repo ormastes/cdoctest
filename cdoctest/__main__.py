@@ -27,9 +27,9 @@ if __name__ == '__main__':
     parser.add_argument('-cdtt', '--cdt_target', help='target file', required=True) # todo directory
     parser.add_argument('-cdtce', '--cdt_c_extension', help='target c file extension', default='cpp')
     parser.add_argument('-cdthe', '--cdt_header_extension', help='target h file extension', default='h')
-    parser.add_argument('-cdttc', '--cdt_testcase_extension', help='target tc', default='*')
-    parser.add_argument('-cdtl', '--cdt_target_lib', help='target lib', required=True)
-    parser.add_argument('-cdtcip', '--cdt_cplus_include_path', help='target lib type')
+    #parser.add_argument('-cdttc', '--cdt_testcase_extension', help='target tc', default='*')
+    parser.add_argument('-cdtl', '--cdt_target_lib', help='target lib, separate by ";"', required=True)
+    parser.add_argument('-cdtcip', '--cdt_cplus_include_path', help='target lib type, separate by ";"')
 
     args = parser.parse_args()
 
@@ -37,7 +37,11 @@ if __name__ == '__main__':
     c_tests_nodes = []
     Shell.env = os.environ.copy()
     if args.cdt_cplus_include_path is not None:
-        Shell.env['CPLUS_INCLUDE_PATH'] = args.cdt_cplus_include_path
+        # if linux replace ';' to ':'
+        if os.name == 'posix':
+            Shell.env['CPLUS_INCLUDE_PATH'] = args.cdt_cplus_include_path.replace(';', ':')
+        else:
+            Shell.env['CPLUS_INCLUDE_PATH'] = args.cdt_cplus_include_path
 
     target_file = args.cdt_target
 
@@ -60,3 +64,14 @@ if __name__ == '__main__':
                     print('expected: ', test.outputs)
                     print('actual: ', test.output_result)
 
+    # Don't know why exception yet.
+    try:
+        def __new_del__(self):
+            if clang is not None and clang.cindex is not None and clang.cindex.conf is not None:
+                clang.cindex.conf.lib.clang_disposeIndex(self)
+
+        clang.cindex.Index.__del__ = __new_del__
+
+        del clang.cindex.Index
+    except Exception:
+        pass
