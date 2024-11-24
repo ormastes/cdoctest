@@ -16,7 +16,7 @@ def convert_result(result):
 def setup_dir():
     # set env export CPLUS_INCLUDE_PATH=/mnt/c/cling/jupyter/llvm-project_linux/build/lib/clang/18/include
     env = os.environ
-    env['CPLUS_INCLUDE_PATH'] = '/mnt/c/cling/jupyter/llvm-project_linux/build/lib/clang/18/include'
+    #env['CPLUS_INCLUDE_PATH'] = '/mnt/c/cling/jupyter/llvm-project_linux/build/lib/clang/18/include'
 
     if not os.path.isdir(platform.system()):
         pass #raise Exception('Please run this test on supported platform.')

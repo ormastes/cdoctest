@@ -29,9 +29,22 @@ def find_prog(prog):
         return prog, False
     # file part of prog
     prog = os.path.basename(prog)
-    embedded_prog = os.path.join(os.path.dirname(os.path.realpath(__file__)), platform.system(), prog)
-    if os.path.isfile(embedded_prog) and os.path.exists(embedded_prog):
-        return embedded_prog, False
+
+    os_dir = None
+    if platform.system() == "Windows":
+        # find first directory start with 'Win'
+        for dir in os.listdir(os.path.dirname(os.path.realpath(__file__))):
+            if dir.startswith('Win') and os.path.isdir(dir):
+                os_dir = dir
+                break
+    else:
+        os_dir = platform.system()
+
+    if os_dir is not None:
+        embedded_prog = os.path.join(os.path.dirname(os.path.realpath(__file__)), os_dir, prog)
+        if os.path.isfile(embedded_prog) and os.path.exists(embedded_prog):
+            return embedded_prog, False
+    
     if is_tool(prog):
         cmd = "where" if platform.system() == "Windows" else "which"
         out = check_output([cmd, prog])

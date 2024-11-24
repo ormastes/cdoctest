@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 import requests
+import platform
 
 from jupyter_client.kernelspec import KernelSpecManager
 from tempfile import TemporaryDirectory
@@ -18,7 +19,7 @@ kernel_json = {
 }
 
 
-def install_my_kernel_spec(user=True, prefix=None, args=None, suffix=None, name_suffix=''):
+def install_my_kernel_spec(user=True, prefix=None, args=None, suffix=None, name_suffix='', platform_system=platform.system()):
     with TemporaryDirectory() as td:
         os.chmod(td, 0o755)  # Starts off as 700, not user readable
         local_kernel_json = kernel_json.copy()
@@ -48,17 +49,24 @@ def install_my_kernel_spec(user=True, prefix=None, args=None, suffix=None, name_
             except FileNotFoundError:
                 print("Custom logo files not found. Default logos will be used.")
 
-        install_bundles()
+        clang_repl_file = 'clang_repl' + suffix
+        install_bundles(platform_system)
 
-        KernelSpecManager().install_kernel_spec(td, 'clang_repl' + suffix, user=user, prefix=prefix)
+        KernelSpecManager().install_kernel_spec(td, clang_repl_file, user=user, prefix=prefix)
 
 
-def install_bundles():
+def install_bundles(platform_system):
     # currently does not work. See https://gist.github.com/fkraeutli/66fa741d9a8c2a6a238a01d17ed0edc5 for details
-    if False:  # not os.path.exists(ClangReplConfig.BIN_PATH):
-        url = "https://raw.githubusercontent.com/ormastes/jupyter_kernels/main/clang_repl_kernel/clang_repl_kernel/"\
-              + ClangReplConfig.BIN_REL_DIR + "/" \
-              + ClangReplConfig.BIN
+    files = {
+        'Linux': 'https://mega.nz/folder/iFdXmb6L#RKO8HmgjgVj3Mv3M1LYE7g/file/fN9EkbrK',
+        'Windows': 'https://mega.nz/file/uMMCTQrJ#ki37f5nQXcDWKe8CWTBhMXsqbzN8llCiAO3hykiJQr4', # Win_x64_MD
+        'Win_i386_MT': 'https://mega.nz/file/jZlylT7R#DEO7MilDHrBSaGs0opSIeiwAYfcRxnIdGaLu0eGTyVY',
+        'Win_i386_MD': 'https://mega.nz/file/mRMBgLqJ#npzAl5_vtC6YyFacR18Tz3YVtCrCtfoMyURVaoSca3o',
+        'Win_x64_MT': 'https://mega.nz/file/mI0BTZTR#vCgs1vypfEVbqjGLIuHK2v1a4NBGRSoJV0J3YjHQin8',
+        'Win_x64_MD': 'https://mega.nz/file/uMMCTQrJ#ki37f5nQXcDWKe8CWTBhMXsqbzN8llCiAO3hykiJQr4'
+    }
+    if not os.path.exists(ClangReplConfig.BIN_PATH):
+        url = files[platform_system]
         print("Downloading clang_repl binary from " + url)
         req = requests.get(url, stream=True)
         if req.status_code == 200:
@@ -89,6 +97,9 @@ def main(argv=None):
     ap.add_argument('--prefix',
                     help="Install to the given prefix. "
                          "Kernelspec will be installed in {PREFIX}/share/jupyter/kernels/")
+    ap.add_argument('--platform-system', 
+                    help="Platform system (Linux, Windows, Win_i386_MT, Win_i386_MD, Win_x64_MT, Win_x64_MD)", 
+                    default=platform.system())
     args = ap.parse_args(argv)
 
     if args.sys_prefix:
@@ -97,13 +108,13 @@ def main(argv=None):
         args.user = True
 
     install_my_kernel_spec(user=args.user, prefix=args.prefix,
-                           args=['--std=c++14'], suffix='_cpp14', name_suffix=' (C++14)')
+                           args=['--std=c++14'], suffix='_cpp14', name_suffix=' (C++14)', platform_system=args.platform_system)
     install_my_kernel_spec(user=args.user, prefix=args.prefix,
-                           args=['--std=c++17'], suffix='_cpp17', name_suffix=' (C++17)')
+                           args=['--std=c++17'], suffix='_cpp17', name_suffix=' (C++17)', platform_system=args.platform_system)
     install_my_kernel_spec(user=args.user, prefix=args.prefix,
-                           args=['--std=c++20'], suffix='_cpp20', name_suffix=' (C++20)')
+                           args=['--std=c++20'], suffix='_cpp20', name_suffix=' (C++20)', platform_system=args.platform_system)
     install_my_kernel_spec(user=args.user, prefix=args.prefix,
-                           args=['--std=c++23'], suffix='_cpp23', name_suffix=' (C++23)')
+                           args=['--std=c++23'], suffix='_cpp23', name_suffix=' (C++23)', platform_system=args.platform_system)
 
 
 if __name__ == '__main__':
