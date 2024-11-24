@@ -3,14 +3,27 @@ git clone  --depth 1 -b private/ormastes_current https://github.com/ormastes/llv
 mkdir llvm-build
 cd llvm-build
 
-mkdir i386
-cd i386
-cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_PROJECTS=clang -A Win32 -G "Visual Studio 17 2022"  ../../llvm/llvm
-cmake --build . --target clang clang-repl -j 4
+mkdir i386_MT
+cd i386_MT
+cmake -DCMAKE_CXX_FLAGS_RELEASE="/MT" -DCMAKE_CXX_FLAGS_DEBUG="/MTd" -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_PROJECTS=clang -A Win32 -G "Visual Studio 17 2022"  ../../llvm/llvm
+cmake --build . --target clang clang-repl -j 16
 cd ..
 
-mkdir x64
-cd x64
-cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_PROJECTS=clang -G "Ninja" ../../llvm/llvm
-cmake --build . --target clang clang-repl -j 4
+mkdir i386_MD
+cd i386_MD
+cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_PROJECTS=clang -A Win32 -G "Visual Studio 17 2022"  ../../llvm/llvm
+cmake --build . --target clang clang-repl -j 16
+cd ..
+
+
+mkdir x64_MT
+cd x64_MT
+cmake -DCMAKE_CXX_FLAGS_RELEASE="/MT" -DCMAKE_CXX_FLAGS_DEBUG="/MTd" -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_PROJECTS=clang -G "Ninja" ../../llvm/llvm
+cmake --build . --target clang clang-repl -j 16
+cd ..
+
+mkdir x64_MD
+cd x64_MD
+cmake  -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=X86 -DLLVM_ENABLE_PROJECTS=clang -G "Ninja" ../../llvm/llvm
+cmake --build . --target clang clang-repl -j 16
 cd ..
