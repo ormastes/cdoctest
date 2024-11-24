@@ -1,4 +1,7 @@
-clang~=16.0.1.1
+clang~=17.0.6
 libclang~=16.0.6
 setuptools~=63.2.0
-clang_repl_kernel~=0.1.8
+ipykernel~=6.29.5
+requests~=2.32.3
+pytest~=8.3.3
+clang_repl_kernel~=0.1.7
