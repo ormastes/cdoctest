@@ -15,7 +15,7 @@ setuptools.setup(
     packages=['cdoctest'],#setuptools.find_packages(),
     include_package_data=True,
     exclude_package_data={'': ['test']},
-    install_requires=['clang', 'clang_repl_kernel>=0.1.8',, 'libclang'],
+    install_requires=['clang', 'clang_repl_kernel>=0.1.8', 'libclang'],
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
