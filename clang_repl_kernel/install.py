@@ -1,14 +1,18 @@
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 import shutil
+import urllib
+
 import requests
 import platform
+import zipfile
 
 from jupyter_client.kernelspec import KernelSpecManager
 from tempfile import TemporaryDirectory
-
 from clang_repl_kernel import ClangReplConfig
 
 kernel_json = {
@@ -33,10 +37,10 @@ def install_my_kernel_spec(user=True, prefix=None, args=None, suffix=None, name_
         if len(my_env) == 0:
             print("No environment variables found. Please set CPLUS_INCLUDE_PATH manually")
             local_kernel_json['env']['EMPTY'] = 'True'
-        if False:# local_kernel_json['env']['CPLUS_INCLUDE_PATH'] == '':
+        #if False:# local_kernel_json['env']['CPLUS_INCLUDE_PATH'] == '':
             # get input from user
-            local_kernel_json['env']['CPLUS_INCLUDE_PATH'] = \
-                input("Please enter the path to the C++ include directory (where 'stddef.h is located)\n For example: /usr/lib/llvm-18/lib/clang/18/include : ")
+            #local_kernel_json['env']['CPLUS_INCLUDE_PATH'] = \
+            #    input("Please enter the path to the C++ include directory (where 'stddef.h is located)\n For example: /usr/lib/llvm-18/lib/clang/18/include : ")
 
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(local_kernel_json, f, sort_keys=True)
@@ -55,28 +59,55 @@ def install_my_kernel_spec(user=True, prefix=None, args=None, suffix=None, name_
         KernelSpecManager().install_kernel_spec(td, clang_repl_file, user=user, prefix=prefix)
 
 
+def get_filename_from_response(url):
+    response = requests.head(url, allow_redirects=True)
+
+    # 1. Check if Content-Disposition is provided
+    content_disp = response.headers.get("Content-Disposition")
+    if content_disp:
+        # Attempt to extract filename="..." from Content-Disposition
+        match = re.search(r'filename="([^"]+)"', content_disp)
+        if match:
+            return match.group(1)
+
+    return "downloaded.file"
+
 def install_bundles(platform_system):
     # currently does not work. See https://gist.github.com/fkraeutli/66fa741d9a8c2a6a238a01d17ed0edc5 for details
     files = {
         'Linux': 'https://mega.nz/folder/iFdXmb6L#RKO8HmgjgVj3Mv3M1LYE7g/file/fN9EkbrK',
-        'Windows': 'https://mega.nz/file/uMMCTQrJ#ki37f5nQXcDWKe8CWTBhMXsqbzN8llCiAO3hykiJQr4', # Win_x64_MD
-        'Win_i386_MT': 'https://mega.nz/file/jZlylT7R#DEO7MilDHrBSaGs0opSIeiwAYfcRxnIdGaLu0eGTyVY',
-        'Win_i386_MD': 'https://mega.nz/file/mRMBgLqJ#npzAl5_vtC6YyFacR18Tz3YVtCrCtfoMyURVaoSca3o',
-        'Win_x64_MT': 'https://mega.nz/file/mI0BTZTR#vCgs1vypfEVbqjGLIuHK2v1a4NBGRSoJV0J3YjHQin8',
-        'Win_x64_MD': 'https://mega.nz/file/uMMCTQrJ#ki37f5nQXcDWKe8CWTBhMXsqbzN8llCiAO3hykiJQr4'
+        'Windows': 'https://mega.nz/file/jdEg2bBK#faSU0VkFd8izmq7Ydzf6dAHxau1qxZ2aPZKt-Ow7PIo', # WinMG64
+        'WinMG32': 'https://mega.nz/file/iU0W2CBK#gIw33d3aP0G_CYJz8cokXHqlCDmOS9VGX91HTmjOB7M',
+        'WinMG64': 'https://mega.nz/file/jdEg2bBK#faSU0VkFd8izmq7Ydzf6dAHxau1qxZ2aPZKt-Ow7PIo',
+        'Lin64': 'https://mega.nz/folder/iFdXmb6L#RKO8HmgjgVj3Mv3M1LYE7g/file/fN9EkbrK',
+        'Lin32': 'https://mega.nz/folder/iFdXmb6L#RKO8HmgjgVj3Mv3M1LYE7g/file/fN9EkbrK',
     }
-    if not os.path.exists(ClangReplConfig.BIN_PATH):
+    ClangReplConfig.platform = platform_system
+    if not os.path.exists(ClangReplConfig.get_bin_path()):
         url = files[platform_system]
+        zip_filename = platform_system+".zip"
+        extract_dir = ClangReplConfig.get_install_dir()
         print("Downloading clang_repl binary from " + url)
-        req = requests.get(url, stream=True)
-        if req.status_code == 200:
+        try:
+            #subprocess.run(["mega-get.bat", files[platform_system], platform_system+".zip"]) add current env path
+            env = os.environ.copy()
+            response = subprocess.run(["mega-get"+ClangReplConfig.SCRIPT_EXT, url, zip_filename], env=env)
+        except Exception as e:
+            print("Mega CLI not found. Please install it from https://mega.io/cmd#downloadapps")
+            print("May need path to C:/Users/[USERNAME]/AppData/Local/MEGAcmd")
+            return
+
+        if response.returncode == 0 : # response.status_code == 200:
             print("Download successful")
-            os.makedirs(ClangReplConfig.BIN_DIR, exist_ok=True)
-            with open(ClangReplConfig.BIN_PATH, "wb") as _fh:
-                req.raw.decode_content = True
-                shutil.copyfileobj(req.raw, _fh)
+
+            # Unzip the contents into the extract_dir
+            with zipfile.ZipFile(zip_filename, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+            print("Unzip complete. Files extracted to:", extract_dir)
+            # Remove the zip file
+            os.remove(zip_filename)
         else:
-            print("Download failed with status code " + str(req.status_code))
+            print("Download failed with status code " + str(response.returncode)) #str(response.status_code))
             print("Please download the binary manually and place it in default path.")
             print("The clang-repl binary can be build from source. See https://clang.llvm.org/docs/ClangRepl.html")
 

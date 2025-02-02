@@ -5,7 +5,7 @@ __pycache__/
 
 # C extensions
 *.so
-
+.idea/**
 # Distribution / packaging
 .Python
 build/
@@ -22,6 +22,9 @@ var/
 wheels/
 clang_repl_kernel/Windows/
 clang_repl_kernel/Linux/
+clang_repl_kernel/clang/
+clang_repl_kernel/llvm/
+llvm/
 llvm-build/
 share/python-wheels/
 *.egg-info/

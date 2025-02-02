@@ -1,7 +1,7 @@
 #pragma once
 /**
 >>> test::Fac fac;
->>> printf("%d\n",fac.fac(5));
+>>> std::cout << fac.fac(5) << std::endl;//printf("%d\n",fac.fac(5));
 120
 >>> printf("%d\n",fac.fac2(5));
 120

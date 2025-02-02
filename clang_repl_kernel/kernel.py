@@ -8,8 +8,8 @@ import os
 import sys
 import platform
 import logging
-
-
+import yaml
+from llvm.mlir.utils.spirv.gen_spirv_dialect import get_availability_spec
 
 
 def is_tool(name):
@@ -71,24 +71,49 @@ class ClangReplConfig:
     BIN_CLANG = 'clang'
     PYTHON_EXE = 'python3'
     if platform.system() == 'Windows':
-        DLIB = 'libclang.dll'
+        DLIB = 'libclang-cpp.dll'
         BIN = 'clang-repl.exe'
         BIN_CLANG = 'clang.exe'
         PYTHON_EXE = 'python.exe'
+        SCRIPT_EXT = '.bat'
     elif platform.system() == 'Darwin':
         DLIB = 'libclang.dylib'
     else:
         pass
-    BIN_REL_DIR = platform.system()
-    BIN_REL_PATH = os.path.join(BIN_REL_DIR, BIN)
-    BIN_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), platform.system())
-    BIN_PATH = os.path.join(BIN_DIR, BIN)
+    CLANG_BASE_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'clang')
     BANNER_NAME = 'clang-repl'
     PREFER_BUNDLE = True  # if platform.system() == 'Windows' else False
+    #BIN_DIR = os.path.join(CLANG_BASE_DIR, platform.system())
+    #BIN_PATH = os.path.join(BIN_DIR, BIN)
+    platform = None
+    @staticmethod
+    def get_install_dir():
+        return os.path.join(ClangReplConfig.CLANG_BASE_DIR, ClangReplConfig.platform)
+    @staticmethod
+    def get_bin_dir():
+        return os.path.join(ClangReplConfig.get_install_dir(), 'bin')
+    @staticmethod
+    def get_bin_path():
+        return os.path.join(ClangReplConfig.get_bin_dir(), ClangReplConfig.BIN)
+
+    @classmethod
+    def get_available_bin_path(cls):
+        bin_path = []
+        for a_dir in os.listdir(ClangReplConfig.CLANG_BASE_DIR):
+            if os.path.isdir(os.path.join(ClangReplConfig.CLANG_BASE_DIR, a_dir)):
+                bin_path.append(a_dir)
+        return bin_path
+
+    @staticmethod
+    def get_default_platform():
+        if platform.system() in ClangReplConfig.get_available_bin_path():
+            return platform.system()
+        return ClangReplConfig.get_available_bin_path()[0]
+
 
 class Shell:
     env = os.environ.copy()
-    def __init__(self, bin_path='Windows\\clang-repl.exe', banner_name='clang-repl'):
+    def __init__(self, bin_path, banner_name='clang-repl'):
         self.process = None
         self.bin_path = bin_path
         self.banner = banner_name + '> '
@@ -106,6 +131,16 @@ class Shell:
 
     def __del__(self):
         self.del_loop()
+
+    @staticmethod
+    def get_available_bin_path():
+        # get directory under ClangReplConfig.CLANG_BASE_DIR
+        bin_path = []
+        for a_dir in os.listdir(ClangReplConfig.CLANG_BASE_DIR):
+            if os.path.isdir(os.path.join(ClangReplConfig.CLANG_BASE_DIR, a_dir)):
+                bin_path.append(a_dir)
+        return bin_path
+
 
     async def _del_loop(self):
         if self.process is not None:
@@ -139,6 +174,9 @@ class Shell:
 
         program_with_args = [program] + self.args
         env = self.env
+        program_path = str(os.path.dirname(program)) + os.pathsep
+        if env['PATH'] is not None and not env['PATH'].startswith(program_path):
+            env['PATH'] =program_path + env['PATH']
         #for key in env:
             #logger.debug('This is hidden')
             #logger.warning('This too')
@@ -271,12 +309,12 @@ class Shell:
 
 
 class BashShell(Shell):
-    def __init__(self, bin_path=ClangReplConfig.BIN_PATH, banner_name=ClangReplConfig.BANNER_NAME):
+    def __init__(self, bin_path, banner_name=ClangReplConfig.BANNER_NAME):
         super().__init__(bin_path, banner_name)
 
 
 class WinShell(Shell):
-    def __init__(self, bin_path=ClangReplConfig.BIN_PATH, banner_name=ClangReplConfig.BANNER_NAME):
+    def __init__(self, bin_path, banner_name=ClangReplConfig.BANNER_NAME):
         super().__init__(bin_path, banner_name)
 
 
@@ -308,10 +346,15 @@ class ClangReplKernel(Kernel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        platforms = ClangReplConfig.get_available_bin_path()
+        if len(platforms) == 0:
+            raise Exception('Cannot find any installed clang for this platform')
+        ClangReplConfig.platform = ClangReplConfig.get_default_platform()
+
         if os.name == 'nt':
-            self.my_shell = WinShell()
+            self.my_shell = WinShell(ClangReplConfig.platform)
         else:
-            self.my_shell = BashShell()
+            self.my_shell = BashShell(ClangReplConfig.platform)
 
         self.std_arg = 'c++23'
         for an_input in reversed(sys.argv):
@@ -329,15 +372,8 @@ class ClangReplKernel(Kernel):
         self.my_shell.kill_and_run()
         return {"status": "ok", "restart": restart}
 
-    def do_execute(
-            self,
-            code,
-            silent,
-            store_history=True,
-            user_expressions=None,
-            allow_stdin=False,
-            *,
-            cell_id=None):
+    def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False, *, cell_id=None,
+                   **kwargs):
         def send_response(msg):
             stream_content = {'name': 'stdout', 'text': msg}
             self.send_response(self.iopub_socket, 'stream', stream_content)

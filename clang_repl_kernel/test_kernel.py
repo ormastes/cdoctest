@@ -26,7 +26,8 @@ def setup_dir():
 def kernel():
     ClangReplKernel.ClangReplKernel_InTest = True
     result = MockedKernel()
-    result.my_shell._prog = ClangReplConfig.BIN_PATH
+    ClangReplConfig.platform = ClangReplConfig.get_default_platform()
+    result.my_shell._prog = ClangReplConfig.get_bin_path()
     result.my_shell.run()
     return result
 

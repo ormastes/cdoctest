@@ -1,3 +1,5 @@
+import os
+
 from cdoctest import CDocTest
 from clang_repl_kernel import ClangReplConfig, Shell
 import platform
@@ -339,7 +341,7 @@ def test_run_verify(cdoctest):
     namespace test {
     /**
     >>> test::Fac fac;
-    >>> printf("%d\\n",fac.fac(7));
+    >>> std::cout<<fac.fac(7)<<std::endl; //printf("%d\\n",fac.fac(7));
     5040
     */
     int Fac::fac(int n) {
@@ -347,7 +349,7 @@ def test_run_verify(cdoctest):
     }
     /**
     >>> test::Fac fac;
-    >>> printf("%d\\n",fac.fac2(5));
+    >>> std::cout<<fac.fac2(5)<<std::endl; //printf("%d\\n",fac.fac2(5));
     120
     */
     int Fac::fac2(int n) {
@@ -359,9 +361,9 @@ def test_run_verify(cdoctest):
     #pragma once
     /**
     >>> test::Fac fac;
-    >>> printf("%d\\n",fac.fac(5));
+    >>> std::cout<<fac.fac(5)<<std::endl; //printf("%d\\n",fac.fac(5));
     120
-    >>> printf("%d\\n",fac.fac2(5));
+    >>> std::cout<<fac.fac2(5)<<std::endl; //printf("%d\\n",fac.fac2(5));
     120
     */
     namespace test {
@@ -376,7 +378,7 @@ def test_run_verify(cdoctest):
     public:
     /**
     >>> test::Fac fac;
-    >>> printf("%d\\n",fac.fac(5));
+    >>> std::cout<<fac.fac(5)<<std::endl; //printf("%d\\n",fac.fac2(5));
     120
     */
         int fac(int n);
@@ -391,7 +393,9 @@ def test_run_verify(cdoctest):
     cdoctest.parse_result_test_node(h_file_content, h_tests_nodes)
     merged_node = cdoctest.merge_comments(c_tests_nodes, h_tests_nodes)
 
-    cdoctest.run_verify('sample.so', merged_node, 'sample', 'h')
+    cdt_target_lib_dir = [os.path.dirname(os.path.realpath(__file__))]
+    lib_name = 'sample.dll' if platform.system() == 'Windows' else 'sample.so' #'libsample.so'
+    cdoctest.run_verify(lib_name, cdt_target_lib_dir, merged_node, 'sample', 'h')
 
     for i in range(len(merged_node)):
         assert merged_node[i].test.is_pass is True

@@ -1,7 +1,11 @@
 clang~=17.0.6
 libclang~=16.0.6
-setuptools~=63.2.0
+setuptools~=75.6.0
 ipykernel~=6.29.5
 requests~=2.32.3
 pytest~=8.3.3
-clang_repl_kernel~=0.1.7
+pyyaml~=6.0
+windows-curses
+clang_repl_kernel~=0.1.8
+cmake-file-api~=0.0.8.1
+ordered_set~=4.1.0

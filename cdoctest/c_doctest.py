@@ -7,6 +7,8 @@ from clang_repl_kernel import ClangReplKernel, ClangReplConfig, find_prog, WinSh
 from clang.cindex import CursorKind, TokenKind
 import enum
 
+
+
 class Special(enum.Enum):
     WHITE_SPACE = '<WHITE_SPACE>'
     CONTINUE = '<...>'
@@ -183,11 +185,22 @@ class CDocTest:
     def __init__(self):
         cur_path = os.path.dirname(os.path.abspath(__file__))
         self.prog, self.is_tool_found = find_prog(os.path.join(cur_path, platform.system(), ClangReplConfig.DLIB))
-        self.clang_rep = os.path.abspath(os.path.join(cur_path, '..', 'clang_repl_kernel',platform.system(), ClangReplConfig.BIN))
+        bin_path = ClangReplConfig.get_available_bin_path()
+        if len(bin_path) == 0:
+            print("Could not find any clang for this platform")
+            sys.exit()
+        ClangReplConfig.platform = ClangReplConfig.get_default_platform()
+        self.clang_rep = ClangReplConfig.get_bin_path()
         self.my_shell = None
         self._idx = None
         self.get_idx()
         self.tu = None
+
+        if os.name == 'nt':
+            self.default_lib = ["libc++.dll", "libunwind.dll", "libwinpthread-1.dll", "msvcrt.dll"]
+        else:
+            self.default_lib = ["libc++.so", "libunwind.so", "libpthread.so", "libstdc++.so"]
+
 
         # # A C or C++ struct.
         # CursorKind.STRUCT_DECL = CursorKind(2)
@@ -241,18 +254,59 @@ class CDocTest:
     def get_shell(self):
         return self.my_shell
 
-    def load(self, lib_file):
-        abs_path = os.path.abspath(lib_file)
-        if not(os.path.exists(abs_path) and os.path.isfile(abs_path)):
-            abs_path = os.path.join(os.getcwd(), lib_file)
-            assert os.path.exists(abs_path) and os.path.isfile(abs_path)
+    def check_lib_exist(self, lib_file):
+        possible_paths = [
+            os.path.abspath(lib_file),
+            os.path.join(os.getcwd(), lib_file),
+            os.path.join(ClangReplConfig.get_bin_dir(), lib_file)
+        ]
+
+        abs_path = None
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isfile(path):
+                abs_path = path
+                break
+
+        if abs_path is None:
+            print("Could not find library file:", lib_file)
+            sys.exit()
+
+    def local_load(self, lib_file, paths):
+        possible_paths = []
+        for path in paths:
+            possible_paths.append(os.path.join(path, lib_file))
+
+        abs_path = None
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isfile(path):
+                abs_path = path
+                break
+
+        if abs_path is None:
+            print("Could not find library file:", lib_file)
+            sys.exit()
+
         response = None
 
         def resp_handler(x):
             nonlocal response
             response = x
-        self.get_shell().do_execute('%lib ' + abs_path, resp_handler)
+
+        self.get_shell().do_execute('%lib ' + lib_file, resp_handler)
         assert response is None
+
+    def load(self, lib_file):
+        #self.check_lib_exist(lib_file)
+
+        response = None
+
+        def resp_handler(x):
+            nonlocal response
+            response = x
+
+        self.get_shell().do_execute('%lib ' + lib_file, resp_handler)
+        if response is None:
+            print("Warning! Could not load lib file:", lib_file)
 
     def include(self, header_file, is_system=False):
         response = None
@@ -262,8 +316,10 @@ class CDocTest:
         if is_system:
             self.get_shell().do_execute('#include <' + header_file + '>', resp_handler)
         else:
-            self.get_shell().do_execute('#include "' + header_file+'"', resp_handler)
-        assert response is None
+            self.get_shell().do_execute('#include "' + header_file + '"', resp_handler)
+        if response is None:
+            print("Warning! Could not include file:", header_file)
+
 
     def get_idx(self):
         if self._idx is None:
@@ -288,12 +344,38 @@ class CDocTest:
             s = f.read()
             self._get_func_class_comment_with_text(self.get_idx(), s, result_comments)
 
-    def parse(self, text):
-        this_src_file_dir = os.path.dirname(os.path.abspath(__file__))
-        self.tu = clang.cindex.TranslationUnit.from_source('sample.cpp', args=['-std=c++11', '-I' + this_src_file_dir],
-                                                      unsaved_files=[('sample.cpp', text)],
+    def parse(self, text, file_name):
+        self.tu = clang.cindex.TranslationUnit.from_source("dummy.cpp", args=['-std=c++20', '-I' + os.getcwd()],
+                                                      unsaved_files=[("dummy.cpp", text)],
                                                       options=clang.cindex.TranslationUnit.PARSE_NONE)
-        # self.tu = self.get_idx().parse('tmp.cpp', args=['-std=c++20'], unsaved_files=[('tmp.cpp', text)],
+        assert self.tu is not None
+        class ByPass:
+            def __init__(self, cursor, file_name):
+                file_name = file_name.replace('\\', '/')
+                file_name = file_name.replace('/', '::')
+                self._cursor = cursor
+                self.displayname = file_name
+                self.spelling = file_name
+
+            def __setattr__(self, key, value):
+                if key in ['displayname', 'spelling', '_cursor']:
+                    self.__dict__[key] = value
+                else:
+                    setattr(self._cursor, key, value)
+
+            def __getattr__(self, name):
+                if name in ['displayname', 'spelling', '_cursor'] or name is None:
+                    if name in self.__dict__:
+                        return self.__dict__[name]
+                    else:
+                        return None
+                return getattr(self._cursor, name)
+
+            def __call__(self, *args, **kwargs):
+                return self._cursor(*args, **kwargs)
+
+        self.wrapptedRootCursor = ByPass(self.tu.cursor, file_name)
+        # self.tu = self.get_idx().parse('tmp.cpp', args=['-std=c++20', '-I' + this_src_file_dir],, unsaved_files=[('tmp.cpp', text)],
         #                               options=clang.cindex.TranslationUnit.PARSE_NONE)
 
 
@@ -335,7 +417,7 @@ class CDocTest:
 
     def _get_func_class_comment_with_text(self, result_comments):
         assert self.tu is not None
-        root_node = Node.build_tree(self.tu.cursor)
+        root_node = Node.build_tree(self.wrapptedRootCursor) # replace self.tu.cursor with self.wrapptedRootCursor
         current_comment = None
         for t in self.tu.get_tokens(extent=self.tu.cursor.extent):
             if False:
@@ -393,9 +475,9 @@ class CDocTest:
             result += self._get_func_class_comment(file)
         return result
 
-    def parse_result_test_node(self, file_content, tests_nodes):
+    def parse_result_test_node(self, file_content, tests_nodes, file_name):
         result_comments = []
-        self.parse(file_content)
+        self.parse(file_content, file_name)
         self._get_func_class_comment_with_text(result_comments)
         self.filter_test(result_comments, tests_nodes)
 
@@ -417,15 +499,18 @@ class CDocTest:
         merged_node = self.merge_comments(c_tests_nodes, h_tests_nodes)
         return merged_node
 
-    def run_verify(self, target_lib, merged_node, name=None, header_extension='.h'):
-
+    def run_verify(self, local_target_lib, cdt_target_lib_dir, merged_node, name=None, header_extension='.h'):
+        # if target_lib is string make it list
+        if isinstance(local_target_lib, str):
+            local_target_lib = [local_target_lib]
         for node in merged_node:
             self.run()
-            # target_lib can separate by ';'
-            target_libs = target_lib.split(';')
-            for target_lib in target_libs:
+            for target_lib in self.default_lib:
                 self.load(target_lib)
+            for target_lib in local_target_lib:
+                self.local_load(target_lib, cdt_target_lib_dir)
             self.include('cstdio', True)
+            self.include('iostream', True)
             if name is not None:
                 self.include(name + '.' + header_extension)
             node.test.run(self.get_shell())

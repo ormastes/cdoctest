@@ -1,3 +1,4 @@
 name = "cdoctest"
 
-from .cdoctest import CDocTest
+from .c_doctest import CDocTest
+from .cmake_api import CMakeApi

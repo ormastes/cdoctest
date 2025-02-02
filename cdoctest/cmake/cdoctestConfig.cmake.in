@@ -1,0 +1,44 @@
+# use find_package(cdoctest REQUIRED)
+# can specify python location with Python3_EXECUTABLE
+cmake_minimum_required(VERSION 3.15)
+
+project(cdoctest VERSION 1.0
+        DESCRIPTION "CMake package to install the Python cdoctest package and run its utilities"
+        LANGUAGES NONE)
+
+# --- Find Python3 interpreter ---
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+# --- Custom Target: Install Python Package ---
+# This target runs pip to install (or upgrade) the 'cdoctest' package.
+add_custom_target(install_cdoctest_package
+    COMMAND ${Python3_EXECUTABLE} -m pip install --upgrade cdoctest
+    COMMENT "Installing Python package: cdoctest"
+)
+
+# --- Custom Target: Run Utility Function ---
+# This target runs a Python one-liner that imports cdoctest and calls a utility function.
+# (Adjust the command if your cdoctest package exposes a different interface.)
+add_custom_target(run_cdoctest_utility
+    COMMAND ${Python3_EXECUTABLE} -c "import cdoctest; cdoctest.run_utility()"
+    DEPENDS install_cdoctest_package
+    COMMENT "Running cdoctest utility function"
+)
+
+# --- Optional: Provide an aggregated target ---
+# This target can be built to run the utility (and implicitly install cdoctest first)
+add_custom_target(cdoctest_all_utils DEPENDS run_cdoctest_utility)
+
+# --- Install Package Config File for find_package() ---
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cdoctestConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/cdoctestConfig.cmake"
+    INSTALL_DESTINATION "lib/cmake/cdoctest"
+    NO_SET_AND_CHECK_MACRO
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cdoctestConfig.cmake"
+    DESTINATION "lib/cmake/cdoctest"
+)

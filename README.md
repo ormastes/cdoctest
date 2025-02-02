@@ -75,13 +75,13 @@ clang -shared sample.o -o sample.dll
 ### Running Tests with Source Code and Shared Library on Linux
 
 ```bash
-python3 -m cdoctest -cdtt=sample.h -cdtl=sample.so -cdtcip=.
+python3 -m cdoctest -cdtt=sample.h -cdtl=sample.so -cdtip=.
 ```
 
 ### Running Tests with Source Code and DLL on Windows
 
 ```bash
-python3 -m cdoctest -cdtt=sample.h -cdtl=sample.dll -cdtcip=.
+python -m cdoctest -cdtt=sample.h -cdtl=sample.dll -cdtip=.
 ```
 
 ## Installing `clang-repl` Manually
@@ -111,3 +111,5 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLLVM_ENABLE_PROJECTS=clang -G "Unix Makefiles" ../llvm
 cmake --build . --target clang clang-repl -j n
 ```
+
+nest time >>>>>>>>> backup run to run here. windwos 
