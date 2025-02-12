@@ -113,3 +113,16 @@ cmake --build . --target clang clang-repl -j n
 ```
 
 nest time >>>>>>>>> backup run to run here. windwos 
+
+## TODO
+will handle next input to interact with vscode extension.
+list
+```
+.exe GetTcList:
+${test_suite_name}::${test_case_name},${file_path},${line_number}
+```
+run
+```
+.exe TC/${test_suite_name}/${test_case_name} output.vsc
+output.vsc >> contents xml <unitest-results failedtests="0" ><test suite="" name="" passMessage="" ...>
+```
