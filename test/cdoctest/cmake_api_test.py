@@ -51,9 +51,6 @@ def init():
 
 
 class CMakeAPITest(unittest.TestCase):
-    def test_something(self):
-        init()
-        self.assertEqual(True, False)  # add assertion here
 
     def test_get_build_target(self):
         init()
@@ -100,12 +97,43 @@ class CMakeAPITest(unittest.TestCase):
         # cdoctest main
         sys.argv = [
             'cdoctest',  # This is typically the module or script name.
-            '-cdtcbp=cmake/build',
-            '-cdtct=sample'
+            '--cdt_cmake_build_path=cmake/build',
+            '--cdt_cmake_target=sample'
         ]
 
         # Execute the __main__.py of 'mypackage'
         runpy.run_module('cdoctest', run_name="__main__", alter_sys=True)
+        # take output and print
+        print("done")
+
+    def test_actual_cmake_list(self):
+        init()
+        # cdoctest main
+        sys.argv = [
+            'cdoctest',  # This is typically the module or script name.
+            '--cdt_cmake_build_path=cmake/build',
+            '--cdt_cmake_target=sample',
+            '--cdt_list_testcase'
+        ]
+
+        # Execute the __main__.py of 'mypackage'
+        runpy.run_module('cdoctest', run_name="__main__", alter_sys=True)
+        # take output and print
+        print("done")
+
+    def test_actual_cmake_run_a_testcase(self):
+        init()
+        # cdoctest main
+        sys.argv = [
+            'cdoctest',  # This is typically the module or script name.
+            '--cdt_cmake_build_path=cmake/build',
+            '--cdt_cmake_target=sample',
+            '--cdt_run_testcase=cmake::include::sample.h::test::namespace'
+        ]
+
+        # Execute the __main__.py of 'mypackage'
+        runpy.run_module('cdoctest', run_name="__main__", alter_sys=True)
+        # take output and print
         print("done")
 
 

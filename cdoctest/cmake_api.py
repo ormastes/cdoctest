@@ -8,20 +8,21 @@ from cmake_file_api.reply.v1.api import CMakeFileApiV1
 
 
 class CMakeApi:
-    def __init__(self, build_path, target_name):
+    def __init__(self, build_path, target_name, verbose=False):
         self.project = CMakeProject(build_path)
         self.project.cmake_file_api.instrument_all()
         self.project.configure(quiet=True)
         self._build_path = build_path
-        self._target_name = target_name
         self._all_target_libs = []
         self._all_target_sources = set()
         self._all_target_includes = set()
         self._all_libs_artifact = []
+        self.verbose = verbose
 
         results = self.project .cmake_file_api.inspect_all()
-        print("cmake path:", self.project .cmake_file_api.index().cmake.paths.cmake)
-        print("version:", self.project .cmake_file_api.index().cmake.version.string)
+        if verbose:
+            print("cmake path:", self.project .cmake_file_api.index().cmake.paths.cmake)
+            print("version:", self.project .cmake_file_api.index().cmake.version.string)
 
         codemodel_v2 = results[ObjectKind.CODEMODEL][2]
         self.codemodel_v2 = codemodel_v2
@@ -31,8 +32,10 @@ class CMakeApi:
         self._source_path = self.project.source_path
 
         self._targets = self.config.targets
-        print("targets:", self._targets)
+        if verbose:
+            print("targets:", self._targets)
         self._target = None
+        self._target_name = target_name
         self.set_target_name(target_name)
 
         assert os.path.exists(build_path), f"Build path '{build_path}' does not exist."
@@ -71,9 +74,10 @@ class CMakeApi:
             self._get_target_sources(self._all_target_sources, lib)
             self._get_artifact_path(self._all_libs_artifact, lib)
         assert self._target is not None, f"Target '{target_name}' not found in the CMake configuration."
-        print("shared libraries of target:", self._all_target_libs)
-        print("include directories of target:", self._all_target_includes)
-        print("source files of target:", self._all_target_sources)
+        if self.verbose:
+            print("shared libraries of target:", self._all_target_libs)
+            print("include directories of target:", self._all_target_includes)
+            print("source files of target:", self._all_target_sources)
         self._all_target_includes = OrderedSet(self._all_target_includes)
         self._all_target_sources = OrderedSet(self._all_target_sources)
 

@@ -73,16 +73,20 @@ def get_filename_from_response(url):
     return "downloaded.file"
 
 def install_bundles(platform_system):
+    if platform_system == 'Windows':
+        platform_system = 'WinMG64'
+    elif platform_system == 'Linux':
+        platform_system = 'Lin64'
+
     # currently does not work. See https://gist.github.com/fkraeutli/66fa741d9a8c2a6a238a01d17ed0edc5 for details
     files = {
-        'Linux': 'https://mega.nz/folder/iFdXmb6L#RKO8HmgjgVj3Mv3M1LYE7g/file/fN9EkbrK',
-        'Windows': 'https://mega.nz/file/jdEg2bBK#faSU0VkFd8izmq7Ydzf6dAHxau1qxZ2aPZKt-Ow7PIo', # WinMG64
         'WinMG32': 'https://mega.nz/file/iU0W2CBK#gIw33d3aP0G_CYJz8cokXHqlCDmOS9VGX91HTmjOB7M',
         'WinMG64': 'https://mega.nz/file/jdEg2bBK#faSU0VkFd8izmq7Ydzf6dAHxau1qxZ2aPZKt-Ow7PIo',
         'Lin64': 'https://mega.nz/folder/iFdXmb6L#RKO8HmgjgVj3Mv3M1LYE7g/file/fN9EkbrK',
         'Lin32': 'https://mega.nz/folder/iFdXmb6L#RKO8HmgjgVj3Mv3M1LYE7g/file/fN9EkbrK',
     }
-    ClangReplConfig.platform = platform_system
+
+    ClangReplConfig.set_platform(ClangReplConfig.get_default_platform())
     if not os.path.exists(ClangReplConfig.get_bin_path()):
         url = files[platform_system]
         zip_filename = platform_system+".zip"

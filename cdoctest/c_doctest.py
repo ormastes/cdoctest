@@ -3,7 +3,10 @@ import os
 import clang.cindex
 import sys
 import platform
-from clang_repl_kernel import ClangReplKernel, ClangReplConfig, find_prog, WinShell, BashShell
+
+from IPython.testing.tools import full_path
+
+from clang_repl_kernel import ClangReplKernel, PlatformPath, ClangReplConfig, find_prog, WinShell, BashShell
 from clang.cindex import CursorKind, TokenKind
 import enum
 
@@ -130,8 +133,12 @@ class Node:
 
     def __init__(self, id_token, parent_cursor=None):
         self.id_token = id_token
-        self.text = id_token.spelling
-        self.path = self.text if parent_cursor is None else parent_cursor.path + '::' + self.text if self.text != '' else parent_cursor.path
+        if hasattr(id_token, "kind") and id_token.kind in CDocTest.test_grouping:
+            self.end_text = "::" + CDocTest.test_grouping_to_text[id_token.kind]
+        else:
+            self.end_text = ""
+        self.text = id_token.spelling + self.end_text
+        self.path = id_token.spelling if parent_cursor is None else parent_cursor.path + '::' + id_token.spelling if id_token.spelling != '' else parent_cursor.path
         self.parent_cursor = parent_cursor
         self.children = []
         if self.__str__() in Node.node_map.keys() and isinstance(self, TestNode):
@@ -142,7 +149,7 @@ class Node:
             self.children = pre_exist.children
             for child in self.children:
                 child.parent_cursor = self
-            self.path = self.parent_cursor.path + '::' + self.text
+            self.path = self.parent_cursor.path + '::' + id_token.spelling
         Node.node_map[self.__str__()] = self
 
     def __str__(self):
@@ -151,15 +158,32 @@ class Node:
             + str(self.id_token.extent.end.column)
 
     def __repr__(self):
-        return self.path + '_' + str(self.id_token.extent.start.line) + '_' \
+        return self.full_path() + '_' + str(self.id_token.extent.start.line) + '_' \
             + str(self.id_token.extent.start.column) + '_' + str(self.id_token.extent.end.line) + '_' \
             + str(self.id_token.extent.end.column)
 
     def __hash__(self):
-        return hash(self.__str__())
+        return hash(self.__repr__())
 
     def __eq__(self, other):
-        return  self.__str__() == other.__str__()
+        return  self.__repr__() == other.__repr__()
+
+    def full_path(self):
+        return self.path + self.end_text
+
+    def suite(self):
+        full_path = self.full_path()
+        if "::" in full_path:
+            last_index = full_path.rindex("::")
+            return full_path[:last_index]
+        return ""
+
+    def name(self):
+        full_path = self.full_path()
+        if "::" in full_path:
+            last_index = full_path.rindex("::")
+            return full_path[last_index+2:]
+        return full_path
 
     def _build_tree(self):
         for child in self.id_token.get_children():
@@ -182,14 +206,64 @@ class TestNode(Node):
 
 
 class CDocTest:
+    # # A C or C++ struct.
+    # CursorKind.STRUCT_DECL = CursorKind(2)
+    # # A C or C++ union.
+    # CursorKind.UNION_DECL = CursorKind(3)
+    # # A C++ class.
+    # CursorKind.CLASS_DECL = CursorKind(4)
+    # # A function.
+    # CursorKind.FUNCTION_DECL = CursorKind(8)
+    # # An Objective-C @interface.
+    # CursorKind.OBJC_INTERFACE_DECL = CursorKind(11)
+    # # An Objective-C @interface for a category.
+    # CursorKind.OBJC_CATEGORY_DECL = CursorKind(12)
+    # # An Objective-C @protocol declaration.
+    # CursorKind.OBJC_PROTOCOL_DECL = CursorKind(13)
+    # # An Objective-C instance method.
+    # CursorKind.OBJC_INSTANCE_METHOD_DECL = CursorKind(16)
+    # # An Objective-C class method.
+    # CursorKind.OBJC_CLASS_METHOD_DECL = CursorKind(17)
+    # # An Objective-C @implementation.
+    # CursorKind.OBJC_IMPLEMENTATION_DECL = CursorKind(18)
+    # # A C++ class method.
+    # CursorKind.CXX_METHOD = CursorKind(21)
+    # # A C++ namespace.
+    # CursorKind.NAMESPACE = CursorKind(22)
+    # # A C++ constructor.
+    # CursorKind.CONSTRUCTOR = CursorKind(24)
+    # # A C++ destructor.
+    # CursorKind.DESTRUCTOR = CursorKind(25)
+    # # A C++ function template.
+    # CursorKind.FUNCTION_TEMPLATE = CursorKind(30)
+    # # A C++ class template.
+    # CursorKind.CLASS_TEMPLATE = CursorKind(31)
+    # # A C++ class template partial specialization.
+    # CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION = CursorKind(32)
+    test_target = {CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.CLASS_DECL,
+                        CursorKind.FUNCTION_DECL, CursorKind.OBJC_INTERFACE_DECL, CursorKind.OBJC_CATEGORY_DECL,
+                        CursorKind.OBJC_PROTOCOL_DECL, CursorKind.OBJC_INSTANCE_METHOD_DECL,
+                        CursorKind.OBJC_CLASS_METHOD_DECL, CursorKind.OBJC_IMPLEMENTATION_DECL,
+                        CursorKind.CXX_METHOD, CursorKind.NAMESPACE, CursorKind.CONSTRUCTOR,
+                        CursorKind.DESTRUCTOR, CursorKind.FUNCTION_TEMPLATE, CursorKind.CLASS_TEMPLATE,
+                        CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION}
+
+    test_grouping = {CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.CLASS_DECL,
+                          CursorKind.NAMESPACE}
+    test_grouping_to_text = {CursorKind.STRUCT_DECL: 'struct', CursorKind.UNION_DECL: 'union',
+                                    CursorKind.CLASS_DECL: 'class', CursorKind.NAMESPACE: 'namespace'}
+
     def __init__(self):
-        cur_path = os.path.dirname(os.path.abspath(__file__))
-        self.prog, self.is_tool_found = find_prog(os.path.join(cur_path, platform.system(), ClangReplConfig.DLIB))
+        ClangReplConfig.set_platform(ClangReplConfig.get_default_platform())
+        #prog = ClangReplConfig.get_bin_path()
+        #self.prog, self.is_tool_found = find_prog(prog)
+        python_native_bin_dir = os.path.join(ClangReplConfig.PYTHON_CLANG_DLL_DIR, PlatformPath.PYTHON_DLL_PATH[ClangReplConfig.PLATFORM_NAME_ENUM.value][ClangReplConfig.get_python_bits().value], "bin")
+        self.prog, self.is_tool_found = find_prog(os.path.join(python_native_bin_dir, ClangReplConfig.PYTHON_CLANG_LIB))
         bin_path = ClangReplConfig.get_available_bin_path()
         if len(bin_path) == 0:
             print("Could not find any clang for this platform")
             sys.exit()
-        ClangReplConfig.platform = ClangReplConfig.get_default_platform()
+
         self.clang_rep = ClangReplConfig.get_bin_path()
         self.my_shell = None
         self._idx = None
@@ -197,52 +271,12 @@ class CDocTest:
         self.tu = None
 
         if os.name == 'nt':
-            self.default_lib = ["libc++.dll", "libunwind.dll", "libwinpthread-1.dll", "msvcrt.dll"]
+            self.default_lib = []
         else:
-            self.default_lib = ["libc++.so", "libunwind.so", "libpthread.so", "libstdc++.so"]
+            self.default_lib = []
 
 
-        # # A C or C++ struct.
-        # CursorKind.STRUCT_DECL = CursorKind(2)
-        # # A C or C++ union.
-        # CursorKind.UNION_DECL = CursorKind(3)
-        # # A C++ class.
-        # CursorKind.CLASS_DECL = CursorKind(4)
-        # # A function.
-        # CursorKind.FUNCTION_DECL = CursorKind(8)
-        # # An Objective-C @interface.
-        # CursorKind.OBJC_INTERFACE_DECL = CursorKind(11)
-        # # An Objective-C @interface for a category.
-        # CursorKind.OBJC_CATEGORY_DECL = CursorKind(12)
-        # # An Objective-C @protocol declaration.
-        # CursorKind.OBJC_PROTOCOL_DECL = CursorKind(13)
-        # # An Objective-C instance method.
-        # CursorKind.OBJC_INSTANCE_METHOD_DECL = CursorKind(16)
-        # # An Objective-C class method.
-        # CursorKind.OBJC_CLASS_METHOD_DECL = CursorKind(17)
-        # # An Objective-C @implementation.
-        # CursorKind.OBJC_IMPLEMENTATION_DECL = CursorKind(18)
-        # # A C++ class method.
-        # CursorKind.CXX_METHOD = CursorKind(21)
-        # # A C++ namespace.
-        # CursorKind.NAMESPACE = CursorKind(22)
-        # # A C++ constructor.
-        # CursorKind.CONSTRUCTOR = CursorKind(24)
-        # # A C++ destructor.
-        # CursorKind.DESTRUCTOR = CursorKind(25)
-        # # A C++ function template.
-        # CursorKind.FUNCTION_TEMPLATE = CursorKind(30)
-        # # A C++ class template.
-        # CursorKind.CLASS_TEMPLATE = CursorKind(31)
-        # # A C++ class template partial specialization.
-        # CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION = CursorKind(32)
-        self.test_target = {CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.CLASS_DECL,
-                            CursorKind.FUNCTION_DECL, CursorKind.OBJC_INTERFACE_DECL, CursorKind.OBJC_CATEGORY_DECL,
-                            CursorKind.OBJC_PROTOCOL_DECL, CursorKind.OBJC_INSTANCE_METHOD_DECL,
-                            CursorKind.OBJC_CLASS_METHOD_DECL, CursorKind.OBJC_IMPLEMENTATION_DECL,
-                            CursorKind.CXX_METHOD, CursorKind.NAMESPACE, CursorKind.CONSTRUCTOR,
-                            CursorKind.DESTRUCTOR, CursorKind.FUNCTION_TEMPLATE, CursorKind.CLASS_TEMPLATE,
-                            CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION}
+
 
     def run(self):
         if os.name == 'nt':
@@ -489,6 +523,24 @@ class CDocTest:
             for node in h_test_node:
                 inserted.append(node)
 
+        for node in inserted:
+            # first child is comment
+            if len(node.test.tests) > 0:
+                test_name = node.test.tests[0].cmd.strip()
+                if test_name.startswith('//'):
+                    test_name = test_name[2:]
+                    test_name = test_name.strip().replace(' ', '_').replace('\t', '_')
+                    node.end_text = node.end_text + ':' + test_name
+        inserted_map = {}
+        for node in inserted:
+            if node.full_path() in inserted_map.keys():
+                inserted_map[node.full_path()].append(node)
+            else:
+                inserted_map[node.full_path()] = [node]
+        for key in inserted_map.keys():
+            if len(inserted_map[key]) > 1:
+                for i in range(0, len(inserted_map[key])):
+                    inserted_map[key][i].end_text = inserted_map[key][i].end_text + ':' + str(i+1)
         return inserted
 
     def get_test_nodes(self, h_file_content, c_file_content):
@@ -499,10 +551,22 @@ class CDocTest:
         merged_node = self.merge_comments(c_tests_nodes, h_tests_nodes)
         return merged_node
 
-    def run_verify(self, local_target_lib, cdt_target_lib_dir, merged_node, name=None, header_extension='.h'):
+    def run_verify(self, local_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, name=None, header_extension='.h'):
         # if target_lib is string make it list
         if isinstance(local_target_lib, str):
             local_target_lib = [local_target_lib]
+
+        filtered_node = []
+        if cdt_run_testcase is not None and len(cdt_run_testcase) > 0:
+            for node in merged_node:
+                if node.full_path() in cdt_run_testcase:
+                    filtered_node.append(node)
+        else:
+            filtered_node.extend(merged_node)
+
+        merged_node.clear()
+        merged_node.extend(filtered_node)
+
         for node in merged_node:
             self.run()
             for target_lib in self.default_lib:

@@ -30,12 +30,26 @@ def init_include_path(cdt_include_path):
             Shell.env['CPLUS_INCLUDE_PATH'] = cdt_include_path
 
 
-def run_test(cdt_target_lib, cdt_target_lib_dir, merged_node, target_file, args):
+def run_test(cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, target_file, args):
     target_file_name = os.path.basename(target_file).split('.')[0]
-    cdoctest.run_verify(cdt_target_lib, cdt_target_lib_dir, merged_node, target_file_name, args.cdt_header_extension)
+    cdoctest.run_verify(cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, target_file_name, args.cdt_header_extension)
+
+    output_file = args.cdt_output_xml
+    if output_file is not None:
+        with open(output_file, 'w') as f:
+            fail_count = 0
+            num_test = len(merged_node)
+            for i in range(len(merged_node)):
+                if not merged_node[i].test.is_pass:
+                    fail_count += 1
+            # https://github.com/unittest-cpp/unittest-cpp/blob/master/UnitTest%2B%2B/XmlTestReporter.cpp
+            f.write('<unitest-results tests="'+str(num_test)+'" failedtests="'+str(fail_count)+'" >\n')
+            for i in range(len(merged_node)):
+                f.write('<test suite="'+merged_node[i].suite()+'" name="'+merged_node[i].name()+'" />\n')
+            f.write('</unitest-results>\n')
 
     for i in range(len(merged_node)):
-        print(merged_node[i].path, 'pass' if merged_node[i].test.is_pass else 'fail')
+        print(merged_node[i].full_path(), 'pass' if merged_node[i].test.is_pass else 'fail')
         for test in merged_node[i].test.tests:
             if test.is_pass:
                 print('>', str(test), 'pass')
@@ -44,14 +58,14 @@ def run_test(cdt_target_lib, cdt_target_lib_dir, merged_node, target_file, args)
                 print('expected: ', test.outputs)
                 print('actual: ', test.output_result)
 
-def list_test(cdt_target_lib, cdt_target_lib_dir, merged_node, target_file, args):
+def list_test(cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, target_file, args):
     for i in range(len(merged_node)):
         node = merged_node[i]
-        print(node.path + ','+ str(node.id_token.extent.start.line) + ',' \
+        print(node.full_path() + ','+ str(node.id_token.extent.start.line) + ',' \
             + str(node.id_token.extent.start.column) + ',' + str(node.id_token.extent.end.line) + ',' \
             + str(node.id_token.extent.end.column))
 
-def do_job(job_function, target_files, cdt_target_lib, cdt_target_lib_dir, args):
+def do_job(job_function, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, args):
     for target_file in target_files:
         abs_target_file = os.path.abspath(target_file)
         assert os.path.exists(abs_target_file) and os.path.isfile(abs_target_file)
@@ -60,7 +74,7 @@ def do_job(job_function, target_files, cdt_target_lib, cdt_target_lib_dir, args)
             c_file_content = f.read()
             cdoctest.parse_result_test_node(c_file_content, c_tests_nodes, relative_path_from_cwd)
             merged_node = cdoctest.merge_comments(c_tests_nodes, None)
-            job_function(cdt_target_lib, cdt_target_lib_dir, merged_node, abs_target_file, args)
+            job_function(cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, abs_target_file, args)
 
 
 if __name__ == '__main__':
@@ -79,13 +93,14 @@ if __name__ == '__main__':
     parser.add_argument('-cdtce', '--cdt_c_extension', help='target c file extension', default='c')
     parser.add_argument('-cdthe', '--cdt_header_extension', help='target h file extension', default='h')
 
+    parser.add_argument('-v', '--verbose', help='verbose mode', default=False, action='store_true')
 
-    ## todo
     parser.add_argument('-cdtct', '--cdt_cmake_target', help='target to test, current build target will be used if not present.')
     parser.add_argument('-cdtcbp', '--cdt_cmake_build_path', help='cmake build path to search cmake api.')
 
-    parser.add_argument('-cdtlt', '--cdt_list_testcase', help='list all available test cases.', default=False, action='store_true')
+    parser.add_argument('-cdtlt', '--cdt_list_testcase', help='list all available test cases. Use "2> error.log" when there is a system message', default=False, action='store_true')
     parser.add_argument('-cdtrt', '--cdt_run_testcase', help='run a or lists of test cases, separate by ";"')
+    parser.add_argument('-cdtox', '--cdt_output_xml', help='output xml file', default='output.vsc')
 
 
     # 1. cmake dll from target 
@@ -105,13 +120,14 @@ if __name__ == '__main__':
     if exist_none_cmake_args and exist_cmake_args:
         raise Exception("Cannot use cmake "+", ".join(none_cmake_args)+" and "+", ".join(cmake_args)+" together.")
 
-    if args.cdt_list_testcase is not None and args.cdt_run_testcase is not None:
+    if args.cdt_list_testcase is not False and args.cdt_run_testcase is not None:
         raise Exception("Cannot use --cdt_list_testcase and --cdt_run_testcase together.")
 
 
     if args.cdt_target_file is None and args.cdt_cmake_build_path is None:
         raise Exception("Either target file --cdt_target_file or cmake build path --cdt_cmake_build_path should be provided.")
 
+    verbose = args.verbose
 
     cdoctest = CDocTest()
     c_tests_nodes = []
@@ -143,7 +159,9 @@ if __name__ == '__main__':
     # cdt_cmake_build_path
     cdt_cmake_build_path = args.cdt_cmake_build_path
     if cdt_cmake_build_path is not None:
-        cmakeApi = CMakeApi(cdt_cmake_build_path, cdt_cmake_target)
+        assert os.path.exists(cdt_cmake_build_path) and os.path.isdir(cdt_cmake_build_path)
+        assert cdt_cmake_target is not None
+        cmakeApi = CMakeApi(cdt_cmake_build_path, cdt_cmake_target, verbose)
         cdt_cmake_target = cmakeApi.get_target()
         cdt_target_lib = cdt_target_lib + cmakeApi.get_all_libs_artifact()
         cdt_include_path = cdt_include_path +list(cmakeApi.get_all_include_path())
@@ -157,12 +175,10 @@ if __name__ == '__main__':
 
     # cdt_list_testcase
     if args.cdt_list_testcase:
-        do_job(list_test, target_files, cdt_target_lib, cdt_target_lib_dir, args)
+        do_job(list_test, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, args)
 
     else:
-        do_job(run_test, target_files, cdt_target_lib, cdt_target_lib_dir, args)
-
-
+        do_job(run_test, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, args)
 
     # Don't know why exception yet.
     try:

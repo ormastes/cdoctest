@@ -112,17 +112,15 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLLVM_ENABLE_PROJECTS=clang -G "Unix Ma
 cmake --build . --target clang clang-repl -j n
 ```
 
-nest time >>>>>>>>> backup run to run here. windwos 
-
-## TODO
-will handle next input to interact with vscode extension.
+### Support vscode extension
+Handle next input to interact with vscode extension.
 list
 ```
-.exe GetTcList:
-${test_suite_name}::${test_case_name},${file_path},${line_number}
+cdoctest --cdt_cmake_build_path=cmake/build --cdt_cmake_target=sample --cdt_list_testcase
+${test_suite_name}::${test_case_name},${file_path},${line_number},start_col,end_line,end_col
 ```
 run
 ```
-.exe TC/${test_suite_name}/${test_case_name} output.vsc
+cdoctest --cdt_cmake_build_path=cmake/build --cdt_cmake_target=sample  --cdt_run_testcase=${test_suite_name}::${test_case_name}
 output.vsc >> contents xml <unitest-results failedtests="0" ><test suite="" name="" passMessage="" ...>
 ```

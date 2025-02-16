@@ -6,6 +6,6 @@ requests~=2.32.3
 pytest~=8.3.3
 pyyaml~=6.0
 windows-curses
-clang_repl_kernel~=0.1.8
+clang_repl_kernel~=0.1.11
 cmake-file-api~=0.0.8.1
 ordered_set~=4.1.0
