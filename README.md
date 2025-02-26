@@ -16,7 +16,7 @@ A C/C++ DocTest that runs tests using `clang-repl` interaction comments. Support
 namespace test {
 /**
 >>> test::Fac fac;
->>> printf("%d\n", fac.fac(7));
+>>> %<< fac.fac(7);
 5040
 */
 int Fac::fac(int n) {
@@ -24,7 +24,7 @@ int Fac::fac(int n) {
 }
 /**
 >>> test::Fac fac;
->>> printf("%d\n", fac.fac2(5));
+>>> %<< fac.fac2(5);
 120
 */
 int Fac::fac2(int n) {
@@ -39,9 +39,9 @@ int Fac::fac2(int n) {
 #pragma once
 /**
 >>> test::Fac fac;
->>> printf("%d\n", fac.fac(5));
+>>> %<< fac.fac(5);
 120
->>> printf("%d\n", fac.fac2(5));
+>>> %<< fac.fac2(5);
 120
 */
 namespace test {
@@ -49,7 +49,7 @@ class Fac {
 public:
 /**
 >>> test::Fac fac;
->>> printf("%d\n", fac.fac(5));
+>>> %<< fac.fac(5);
 120
 */
     int fac(int n);
