@@ -1,6 +1,6 @@
 # C/C++ DocTest
 
-A C/C++ DocTest that runs tests using `clang-repl` interaction comments. Supports Linux (macOS is untested; Windows DLLs are not supported).
+A C/C++ DocTest that runs tests using `clang-repl` interaction in comments. Supports Linux (macOS is untested).
 
 ## Prerequisites
 
