@@ -5,6 +5,9 @@
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/.venv1" />
+      <excludeFolder url="file://$MODULE_DIR$/build" />
+      <excludeFolder url="file://$MODULE_DIR$/dist" />
+      <excludeFolder url="file://$MODULE_DIR$/test/cdoctest/cmake/build" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.13 (cdoctest)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

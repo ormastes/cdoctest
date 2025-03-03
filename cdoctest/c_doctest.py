@@ -6,7 +6,7 @@ import platform
 
 from IPython.testing.tools import full_path
 
-from clang_repl_kernel import ClangReplKernel, PlatformPath, ClangReplConfig, find_prog, WinShell, BashShell
+from clang_repl_kernel import ClangReplKernel, PlatformPath, ClangReplConfig, find_prog, WinShell, BashShell, install_bundles, get_dll_or_download
 from clang.cindex import CursorKind, TokenKind
 import enum
 
@@ -203,7 +203,52 @@ class TestNode(Node):
         super().__init__(id_token, parent_cursor)
         self.comment_token = comment_token
         self.test = None
+import errno
+from subprocess import check_output
+def is_tool(name):
+    try:
+        import subprocess, os
+        my_env = os.environ.copy()
+        devnull = open(os.devnull)
+        subprocess.Popen([name], stdout=devnull, stderr=devnull,  env=my_env).communicate()
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            return False
+    return True
 
+def _find_prog(prog):
+    if os.path.isabs(prog) and os.path.exists(prog):
+        return prog, False
+    # file part of prog
+    prog = os.path.basename(prog)
+
+    os_dir = None
+    if platform.system() == "Windows":
+        # find first directory start with 'Win'
+        for dir in os.listdir(ClangReplConfig.CLANG_BASE_DIR):
+            if dir.startswith('Win') and os.path.isdir(os.path.join(ClangReplConfig.CLANG_BASE_DIR, dir)):
+                os_dir = dir
+                break
+    else:
+        os_dir = platform.system()
+
+    if os_dir is not None:
+        embedded_prog = os.path.join(ClangReplConfig.CLANG_BASE_DIR, os_dir, "bin", prog)
+        if os.path.isfile(embedded_prog) and os.path.exists(embedded_prog):
+            return embedded_prog, False
+
+    if is_tool(prog):
+        cmd = "where" if platform.system() == "Windows" else "which"
+        out = check_output([cmd, prog])
+        out = out.decode('utf-8')
+        for line in out.splitlines():
+            if len(line.strip()) > 0:
+                out = line.strip()
+                break
+        assert os.path.isfile(out)
+        assert os.path.exists(out)
+        return out, True
+    return None, False
 
 class CDocTest:
     # # A C or C++ struct.
@@ -257,10 +302,19 @@ class CDocTest:
         ClangReplConfig.set_platform(ClangReplConfig.get_default_platform())
         #prog = ClangReplConfig.get_bin_path()
         #self.prog, self.is_tool_found = find_prog(prog)
-        python_native_bin_dir = os.path.join(ClangReplConfig.PYTHON_CLANG_DLL_DIR, PlatformPath.PYTHON_DLL_PATH[ClangReplConfig.PLATFORM_NAME_ENUM.value][ClangReplConfig.get_python_bits().value], "bin")
-        self.prog, self.is_tool_found = find_prog(os.path.join(python_native_bin_dir, ClangReplConfig.PYTHON_CLANG_LIB))
-        bin_path = ClangReplConfig.get_available_bin_path()
-        if len(bin_path) == 0:
+        dll_platform = PlatformPath.PYTHON_DLL_PATH[ClangReplConfig.PLATFORM_NAME_ENUM.value][ClangReplConfig.get_python_bits().value]
+        python_native_bin_dir = os.path.join(
+            ClangReplConfig.PYTHON_CLANG_DLL_DIR,
+            dll_platform)
+        get_dll_or_download(dll_platform, ClangReplConfig.PYTHON_CLANG_LIB, python_native_bin_dir)
+        self.prog, self.is_tool_found = _find_prog(os.path.join(python_native_bin_dir, ClangReplConfig.PYTHON_CLANG_LIB))
+
+        if len(ClangReplConfig.get_available_bin_path()) == 0:
+            # clang is not installed in the system
+            print("Can not find installed clang. Try to install... Please wait")
+            install_bundles(platform.system(), None)
+
+        if len(ClangReplConfig.get_available_bin_path()) == 0:
             print("Could not find any clang for this platform")
             sys.exit()
 

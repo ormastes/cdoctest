@@ -84,43 +84,5 @@ python3 -m cdoctest -cdtt=sample.h -cdtl=sample.so -cdtip=.
 python -m cdoctest -cdtt=sample.h -cdtl=sample.dll -cdtip=.
 ```
 
-## Installing `clang-repl` Manually
-
-Due to GitHub's LFS limit, you need to install `clang-repl` manually until a better binary distribution method is available.
-
-Place the `clang-repl` binary in the `clang_repl_kernel/[Linux|Windows]` directory (e.g., `clang_repl_kernel/Windows/clang-repl.exe`).
-
-### Fixing a Bug in `clang-repl`
-
-There is a minor bug in `clang-repl`. You can clone a branch with the fix applied:
-
-```bash
-git clone -b private/ormastes_current https://github.com/ormastes/llvm-project.git
-```
-
-Alternatively, modify `llvm/lib/LineEditor/LineEditor.cpp` by adding a call to flush the output buffer after printing the prompt.
-
-### Building `clang-repl`
-
-Refer to the [Clang REPL documentation](https://clang.llvm.org/docs/ClangRepl.html) for detailed instructions:
-
-```bash
-cd llvm-project
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLLVM_ENABLE_PROJECTS=clang -G "Unix Makefiles" ../llvm
-cmake --build . --target clang clang-repl -j n
-```
-
 ### Support vscode extension
-Handle next input to interact with vscode extension.
-list
-```
-cdoctest --cdt_cmake_build_path=cmake/build --cdt_cmake_target=sample --cdt_list_testcase
-${test_suite_name}::${test_case_name},${file_path},${line_number},start_col,end_line,end_col
-```
-run
-```
-cdoctest --cdt_cmake_build_path=cmake/build --cdt_cmake_target=sample  --cdt_run_testcase=${test_suite_name}::${test_case_name}
-output.vsc >> contents xml <unitest-results failedtests="0" ><test suite="" name="" passMessage="" ...>
-```
+Can be used with vscode extension [cdoctest_vscode_extension](https://github.com/ormastes/cdoctest_vscode_extension)
