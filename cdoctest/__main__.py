@@ -58,21 +58,26 @@ def run_test(cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, 
                 print('expected: ', test.outputs)
                 print('actual: ', test.output_result)
 
+# const testCaseInfo = line.split(',');
+#         const fixtureTest = testCaseInfo[0];
+#         const _sourceFile = testCaseInfo[1];
+#         const _sourceLine = testCaseInfo[2];
 def list_test(cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, target_file, args):
     for i in range(len(merged_node)):
         node = merged_node[i]
-        print(node.full_path() + ','+ str(node.id_token.extent.start.line) + ',' \
+        print(node.relPath + ','+ node.file_node.spelling +  ','+ str(node.id_token.extent.start.line) + ',' \
             + str(node.id_token.extent.start.column) + ',' + str(node.id_token.extent.end.line) + ',' \
             + str(node.id_token.extent.end.column))
 
-def do_job(job_function, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, args):
+def do_job(job_function, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_src_path,  cdt_run_testcase, args):
     for target_file in target_files:
-        abs_target_file = os.path.abspath(target_file)
+        abs_target_file = os.path.realpath(target_file)
         assert os.path.exists(abs_target_file) and os.path.isfile(abs_target_file)
         relative_path_from_cwd = os.path.relpath(abs_target_file, os.getcwd())
         with open(abs_target_file, 'r') as f:
+            c_tests_nodes = []
             c_file_content = f.read()
-            cdoctest.parse_result_test_node(c_file_content, c_tests_nodes, relative_path_from_cwd)
+            cdoctest.parse_result_test_node(c_file_content, c_tests_nodes, relative_path_from_cwd, cdt_src_path)
             merged_node = cdoctest.merge_comments(c_tests_nodes, None)
             job_function(cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, merged_node, abs_target_file, args)
 
@@ -98,12 +103,16 @@ if __name__ == '__main__':
     parser.add_argument('-cdtct', '--cdt_cmake_target', help='target to test, current build target will be used if not present.')
     parser.add_argument('-cdtcbp', '--cdt_cmake_build_path', help='cmake build path to search cmake api.')
 
+    parser.add_argument('-cdtsp', '--cdt_src_path', help='Source file root path.')
+
     parser.add_argument('-cdtlt', '--cdt_list_testcase', help='list all available test cases. Use "2> error.log" when there is a system message', default=False, action='store_true')
     parser.add_argument('-cdtrt', '--cdt_run_testcase', help='run a or lists of test cases, separate by ";"')
     parser.add_argument('-cdtox', '--cdt_output_xml', help='output xml file', default='output.vsc')
 
+    parser.add_argument('-cdtit', '--cdt_include_target', help='target test case included regex, \';\' separated. can not be used with --cdt_exclude_target', default='')
+    parser.add_argument('-cdtet', '--cdt_exclude_target', help='target test case excluded regex, \';\' separated. can not be used with --cdt_include_target', default='')
 
-    # 1. cmake dll from target 
+    # 1. cmake dll from target
     # 2. cmake cpp/c/header from dlls
     # 3. derive headers from cpp
     # 4. list tests on a file
@@ -126,6 +135,9 @@ if __name__ == '__main__':
 
     if args.cdt_target_file is None and args.cdt_cmake_build_path is None:
         raise Exception("Either target file --cdt_target_file or cmake build path --cdt_cmake_build_path should be provided.")
+
+    if len(args.cdt_include_target) > 0 and len(args.cdt_exclude_target) > 0:
+        raise Exception("Cannot use --cdt_include_target and --cdt_exclude_target together.")
 
     verbose = args.verbose
 
@@ -156,16 +168,26 @@ if __name__ == '__main__':
     # cdt_cmake_target
     cdt_cmake_target = args.cdt_cmake_target
 
+    # cdt_include_target and cdt_include_target
+    cdt_include_target = args.cdt_include_target.split(';') if len(args.cdt_include_target) != 0 else []
+    cdt_exclude_target = args.cdt_exclude_target.split(';') if len(args.cdt_exclude_target) != 0 else []
+
+    cdt_src_path = args.cdt_src_path
     # cdt_cmake_build_path
     cdt_cmake_build_path = args.cdt_cmake_build_path
     if cdt_cmake_build_path is not None:
         assert os.path.exists(cdt_cmake_build_path) and os.path.isdir(cdt_cmake_build_path)
         assert cdt_cmake_target is not None
-        cmakeApi = CMakeApi(cdt_cmake_build_path, cdt_cmake_target, verbose)
+        cmakeApi = CMakeApi(cdt_cmake_build_path, cdt_cmake_target, cdt_include_target, cdt_exclude_target, verbose)
         cdt_cmake_target = cmakeApi.get_target()
-        cdt_target_lib = cdt_target_lib + cmakeApi.get_all_libs_artifact()
+        artifact = cmakeApi.get_all_libs_artifact()
+        cdt_target_lib = cdt_target_lib + artifact
         cdt_include_path = cdt_include_path +list(cmakeApi.get_all_include_path())
         target_files = list(cmakeApi.get_all_candidate_sources_headers(target_files, args.cdt_c_extension, args.cdt_cpp_extension, args.cdt_header_extension))
+        if cdt_src_path is None:
+            cdt_src_path = cmakeApi.source_path
+
+    cdt_src_path = os.path.realpath(cdt_src_path)
 
     # cdt_include_path
     init_include_path(cdt_include_path)
@@ -175,10 +197,10 @@ if __name__ == '__main__':
 
     # cdt_list_testcase
     if args.cdt_list_testcase:
-        do_job(list_test, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, args)
+        do_job(list_test, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_src_path, cdt_run_testcase, args)
 
     else:
-        do_job(run_test, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_run_testcase, args)
+        do_job(run_test, target_files, cdt_target_lib, cdt_target_lib_dir, cdt_src_path, cdt_run_testcase, args)
 
     # Don't know why exception yet.
     try:

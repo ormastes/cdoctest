@@ -3,6 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# temp files
+*.vsc
+
+# binary files
+*.dll
+
+# build files
+test/cdoctest/cmake/**
+
 # C extensions
 *.so
 .idea/**

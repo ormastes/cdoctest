@@ -1,6 +1,6 @@
 import json
 import os
-import sys
+import re
 from pathlib import Path
 from ordered_set import OrderedSet
 from cmake_file_api import CMakeProject, ObjectKind
@@ -8,15 +8,18 @@ from cmake_file_api.reply.v1.api import CMakeFileApiV1
 
 
 class CMakeApi:
-    def __init__(self, build_path, target_name, verbose=False):
+    def __init__(self, build_path, target_name, include_target, exclude_target, verbose=False):
         self.project = CMakeProject(build_path)
         self.project.cmake_file_api.instrument_all()
         self.project.configure(quiet=True)
         self._build_path = build_path
-        self._all_target_libs = []
+        self.source_path = self._get_source_path(self.project)
+        self._include_target = include_target
+        self._exclude_target = exclude_target
+        self._all_target_lib_dict = {}
         self._all_target_sources = set()
         self._all_target_includes = set()
-        self._all_libs_artifact = []
+        self._all_libs_artifact_set = set()
         self.verbose = verbose
 
         results = self.project .cmake_file_api.inspect_all()
@@ -44,6 +47,13 @@ class CMakeApi:
     def get_target(self):
         return self._target
 
+    def _get_source_path(self, project):
+        source_path = self.project.source_path
+        if source_path is None or not os.path.exists(source_path):
+            print(f"Error: Source path '{source_path}' does not exist.")
+            exit(1)
+        return os.path.abspath(source_path)
+
     def get_artifact_path(self, target, idx=0):
         artifact_path = target.target.artifacts[idx]
         path = Path(artifact_path)
@@ -54,10 +64,10 @@ class CMakeApi:
 
     def _get_artifact_path(self, artifact_paths, target):
         artifact = self.get_artifact_path(target)
-        artifact_paths.append(artifact)
+        artifact_paths.add(artifact)
 
     def get_all_libs_artifact(self):
-        return self._all_libs_artifact
+        return list(self._all_libs_artifact_set)
 
     def _get_target_by_name(self, target_name):
         return next((target for target in  self._targets if target.name == target_name), None)
@@ -66,16 +76,16 @@ class CMakeApi:
     def set_target_name(self, target_name):
         self._all_target_includes = []
         self._all_target_sources = []
-        self._all_target_libs = []
+        self._all_target_lib_dict = {}
         self._target = self._get_target_by_name(target_name)
-        self._get_shared_libs(self._all_target_libs, self._target)
-        for lib in self._all_target_libs:
+        self._get_shared_libs(self._all_target_lib_dict, self._target)
+        for lib in self._all_target_lib_dict.values():
             self._get_include_paths(self._all_target_includes, lib)
             self._get_target_sources(self._all_target_sources, lib)
-            self._get_artifact_path(self._all_libs_artifact, lib)
+            self._get_artifact_path(self._all_libs_artifact_set, lib)
         assert self._target is not None, f"Target '{target_name}' not found in the CMake configuration."
         if self.verbose:
-            print("shared libraries of target:", self._all_target_libs)
+            print("shared libraries of target:", self._all_target_lib_dict.keys())
             print("include directories of target:", self._all_target_includes)
             print("source files of target:", self._all_target_sources)
         self._all_target_includes = OrderedSet(self._all_target_includes)
@@ -88,6 +98,8 @@ class CMakeApi:
         return self._targets
 
     def _get_target_sources(self, sources, target):
+        if not self.is_target_testing(target):
+            return
         for source in target.target.sources:
             path = Path(source.path)
             if path.is_absolute():
@@ -97,6 +109,25 @@ class CMakeApi:
 
     def get_all_sources(self):
         return self._all_target_sources
+
+    def is_target_testing(self, target):
+        if target.target.type.value == "STATIC_LIBRARY":
+            return False
+
+        if len(self._include_target) > 0:
+            for include_target in self._include_target:
+                if re.match(include_target, target.target.name)\
+                        or re.match(include_target, target.target.nameOnDisk):
+                    return True
+            return False
+
+        if len(self._exclude_target) > 0:
+            for exclude_target in self._exclude_target:
+                if re.match(exclude_target, target.name):
+                    return False
+            return True
+
+        return True
 
     def _get_include_paths(self, include_path, target):
         for include in target.target.compileGroups[0].includes: # todo
@@ -109,16 +140,19 @@ class CMakeApi:
     def get_all_include_path(self):
         return self._all_target_includes
 
-    def _get_shared_libs(self, shared_libs, target):
+    def _get_shared_libs(self, shared_lib_dic, target):
         # if target is shared library
         if target.target.type.value == "SHARED_LIBRARY":
-            shared_libs.append(target)
+            shared_lib_dic[target.id] = target
         for lib in target.target.dependencies:
-            self._get_shared_libs(shared_libs, lib)
+            if lib.target.type.value != "SHARED_LIBRARY":
+                print(f"Warning: '{lib.target.name}' is not a shared library.")
+                continue
+            self._get_shared_libs(shared_lib_dic, lib)
 
 
     def get_all_shared_lib(self):
-        return self._all_target_libs
+        return self._all_target_lib_dict.values()
 
     def get_all_candidate_sources_headers(self, target_files, c_ext, cpp_ext, h_ext):
         headers = []

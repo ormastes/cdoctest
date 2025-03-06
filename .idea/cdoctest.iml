@@ -9,7 +9,7 @@
       <excludeFolder url="file://$MODULE_DIR$/dist" />
       <excludeFolder url="file://$MODULE_DIR$/test/cdoctest/cmake/build" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.13 (cdoctest)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.13" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

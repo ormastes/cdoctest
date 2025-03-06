@@ -131,7 +131,7 @@ class TestCase(TestAbstract):
 class Node:
     node_map = {}
 
-    def __init__(self, id_token, parent_cursor=None):
+    def __init__(self, id_token, src_path, parent_cursor=None):
         self.id_token = id_token
         if hasattr(id_token, "kind") and id_token.kind in CDocTest.test_grouping:
             self.end_text = "::" + CDocTest.test_grouping_to_text[id_token.kind]
@@ -150,6 +150,16 @@ class Node:
             for child in self.children:
                 child.parent_cursor = self
             self.path = self.parent_cursor.path + '::' + id_token.spelling
+            self.relPath = self.parent_cursor.relPath + '::' + id_token.spelling
+        else:
+            if parent_cursor is None:
+                relPath = id_token.spelling[len(src_path):]
+                if relPath.startswith('/') or relPath.startswith('\\'):
+                    relPath = relPath[1:]
+                self.relPath = relPath
+            else:
+                self.relPath = parent_cursor.relPath + '::' + id_token.spelling
+
         Node.node_map[self.__str__()] = self
 
     def __str__(self):
@@ -185,23 +195,37 @@ class Node:
             return full_path[last_index+2:]
         return full_path
 
-    def _build_tree(self):
+    def _build_tree(self, src_path, visited):
+        if os.name == 'nt':
+            if not self.path.lower().startswith(src_path.lower()):
+                return
+        else:
+            if not self.path.startswith(src_path):
+                return
+        if str(self) in visited:
+            return
+        visited.add(str(self))
+
         for child in self.id_token.get_children():
-            child_node = Node(child, self)
-            child_node._build_tree()
+            if not child.kind in CDocTest.test_parse:
+                continue
+            child_node = Node(child, src_path, self)
+            child_node._build_tree(src_path, visited)
             self.children.append(child_node)
 
     @classmethod
-    def build_tree(cls, cursor):
-        root = Node(cursor)
-        root._build_tree()
+    def build_tree(cls, cursor, src_path):
+        visited = set()
+        root = Node(cursor, src_path)
+        root._build_tree(src_path, visited)
         return root
 
 
 class TestNode(Node):
-    def __init__(self, id_token, comment_token, parent_cursor=None):
-        super().__init__(id_token, parent_cursor)
+    def __init__(self, id_token, comment_token, src_path, file_node):
+        super().__init__(id_token, src_path)
         self.comment_token = comment_token
+        self.file_node = file_node
         self.test = None
 import errno
 from subprocess import check_output
@@ -293,6 +317,10 @@ class CDocTest:
                         CursorKind.DESTRUCTOR, CursorKind.FUNCTION_TEMPLATE, CursorKind.CLASS_TEMPLATE,
                         CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION}
 
+    test_parse = {clang.cindex.TokenKind.PUNCTUATION, clang.cindex.CursorKind.COMPOUND_STMT,
+                  clang.cindex.TokenKind.IDENTIFIER, clang.cindex.TokenKind.COMMENT}
+    test_parse = test_parse.union(test_target)
+
     test_grouping = {CursorKind.STRUCT_DECL, CursorKind.UNION_DECL, CursorKind.CLASS_DECL,
                           CursorKind.NAMESPACE}
     test_grouping_to_text = {CursorKind.STRUCT_DECL: 'struct', CursorKind.UNION_DECL: 'union',
@@ -323,6 +351,7 @@ class CDocTest:
         self._idx = None
         self.get_idx()
         self.tu = None
+        self.verbose = False
 
         if os.name == 'nt':
             self.default_lib = []
@@ -432,18 +461,23 @@ class CDocTest:
             s = f.read()
             self._get_func_class_comment_with_text(self.get_idx(), s, result_comments)
 
-    def parse(self, text, file_name):
+    def parse(self, text, file_name, src_path):
         self.tu = clang.cindex.TranslationUnit.from_source("dummy.cpp", args=['-std=c++20', '-I' + os.getcwd()],
                                                       unsaved_files=[("dummy.cpp", text)],
                                                       options=clang.cindex.TranslationUnit.PARSE_NONE)
         assert self.tu is not None
         class ByPass:
-            def __init__(self, cursor, file_name):
+            def __init__(self, cursor, file_name, src_path):
                 file_name = file_name.replace('\\', '/')
-                file_name = file_name.replace('/', '::')
+                #file_name = file_name.replace('/', '::')
                 self._cursor = cursor
                 self.displayname = file_name
-                self.spelling = file_name
+                absolute_path = os.path.realpath(file_name)
+                self.spelling = absolute_path
+                relPath = absolute_path[len(src_path):]
+                if relPath.startswith('/') or relPath.startswith('\\'):
+                    relPath = relPath[1:]
+                self.relPath = relPath
 
             def __setattr__(self, key, value):
                 if key in ['displayname', 'spelling', '_cursor']:
@@ -462,7 +496,7 @@ class CDocTest:
             def __call__(self, *args, **kwargs):
                 return self._cursor(*args, **kwargs)
 
-        self.wrapptedRootCursor = ByPass(self.tu.cursor, file_name)
+        self.wrapptedRootCursor = ByPass(self.tu.cursor, file_name, src_path)
         # self.tu = self.get_idx().parse('tmp.cpp', args=['-std=c++20', '-I' + this_src_file_dir],, unsaved_files=[('tmp.cpp', text)],
         #                               options=clang.cindex.TranslationUnit.PARSE_NONE)
 
@@ -503,12 +537,12 @@ class CDocTest:
                 node.test.init(test_lines)
                 result_tests.append(node)
 
-    def _get_func_class_comment_with_text(self, result_comments):
+    def _get_func_class_comment_with_text(self, result_comments, src_path):
         assert self.tu is not None
-        root_node = Node.build_tree(self.wrapptedRootCursor) # replace self.tu.cursor with self.wrapptedRootCursor
+        root_node = Node.build_tree(self.wrapptedRootCursor, src_path) # replace self.tu.cursor with self.wrapptedRootCursor
         current_comment = None
         for t in self.tu.get_tokens(extent=self.tu.cursor.extent):
-            if False:
+            if self.verbose:
                 print('>', t.kind, t.spelling, t.location.line, t.location.column, t.cursor.kind, t.cursor.spelling,
                      t.cursor.location.line, t.cursor.location.column, t.cursor.extent.start.line,
                      t.cursor.extent.start.column,
@@ -522,7 +556,7 @@ class CDocTest:
             # TokenKind.IDENTIFIER CursorKind.FUNCTION_DECL process comment if exists
             if t.kind == clang.cindex.TokenKind.IDENTIFIER and t.cursor.kind in self.test_target:
                 if current_comment is not None:
-                    result_comments.append(TestNode(t.cursor, current_comment))
+                    result_comments.append(TestNode(t.cursor, current_comment, src_path, self.wrapptedRootCursor))
                     current_comment = None
             # TokenKind.COMMENT CursorKind.INVALID_FILE add comment
             if t.kind == clang.cindex.TokenKind.COMMENT:
@@ -563,10 +597,13 @@ class CDocTest:
             result += self._get_func_class_comment(file)
         return result
 
-    def parse_result_test_node(self, file_content, tests_nodes, file_name):
+    def parse_result_test_node(self, file_content, tests_nodes, file_name, src_path):
+        # check file_content contains ">>>"
+        if file_content.find('>>>') == -1:
+            return
         result_comments = []
-        self.parse(file_content, file_name)
-        self._get_func_class_comment_with_text(result_comments)
+        self.parse(file_content, file_name, src_path)
+        self._get_func_class_comment_with_text(result_comments, src_path)
         self.filter_test(result_comments, tests_nodes)
 
     def merge_comments(self, c_test_node, h_test_node):
@@ -600,7 +637,7 @@ class CDocTest:
     def get_test_nodes(self, h_file_content, c_file_content):
         c_tests_nodes = []
         h_tests_nodes = []
-        #self.parse_result_test_node(c_file_content, c_tests_nodes)
+        self.parse_result_test_node(c_file_content, c_tests_nodes)
         self.parse_result_test_node(h_file_content, h_tests_nodes)
         merged_node = self.merge_comments(c_tests_nodes, h_tests_nodes)
         return merged_node

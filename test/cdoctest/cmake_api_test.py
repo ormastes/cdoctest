@@ -20,6 +20,8 @@ def init():
     cmake_abs_dir = os.path.abspath(cmake_dir)
     cmake_build_abs_dir = os.path.join(cmake_abs_dir, "build")
 
+
+
     if is_built:
         return
     # Determine the script to run based on the platform

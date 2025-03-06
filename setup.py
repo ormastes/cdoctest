@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="cdoctest",
-    version="1.1.0",
+    version="1.4.18",
     author="Yoon, Jonghyun",
     author_email="ormastes@gmail.com",
     description="doctest for C/C++ which run tests by using clang-repl interaction comments.",
@@ -15,7 +15,7 @@ setuptools.setup(
     packages=['cdoctest'],#setuptools.find_packages(),
     include_package_data=True,
     exclude_package_data={'': ['test']},
-    install_requires=['clang', 'clang_repl_kernel>=1.1.18', 'libclang'],
+    install_requires=['clang', 'clang_repl_kernel>=1.4.18', 'ipykernel', 'libclang', 'ordered_set', 'cmake_file_api'],
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
