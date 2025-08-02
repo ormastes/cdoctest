@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="cdoctest",
-    version="1.4.18",
+    version="1.4.20",
     author="Yoon, Jonghyun",
     author_email="ormastes@gmail.com",
     description="doctest for C/C++ which run tests by using clang-repl interaction comments.",
