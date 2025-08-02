@@ -1,5 +1,5 @@
 clang~=18.1.8
-libclang~=18.1.1
+libclang==18.1.1
 setuptools~=75.6.0
 ipykernel~=6.29.5
 requests~=2.32.3

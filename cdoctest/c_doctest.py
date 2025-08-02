@@ -464,7 +464,7 @@ class CDocTest:
     def parse(self, text, file_name, src_path):
         self.tu = clang.cindex.TranslationUnit.from_source("dummy.cpp", args=['-std=c++20', '-I' + os.getcwd()],
                                                       unsaved_files=[("dummy.cpp", text)],
-                                                      options=clang.cindex.TranslationUnit.PARSE_NONE)
+                                                      options=clang.cindex.TranslationUnit.PARSE_NONE|clang.cindex.TranslationUnit.PARSE_INCOMPLETE |clang.cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
         assert self.tu is not None
         class ByPass:
             def __init__(self, cursor, file_name, src_path):
